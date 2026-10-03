@@ -1,0 +1,27 @@
+# Build outputs in any subproject
+build/
+Debug/
+Release/
+
+# Stray build artifacts outside build/
+*.o
+*.d
+*.lst
+*.elf
+*.map
+
+# Personal VS Code settings (keep shared tasks/launch configs)
+.vscode/settings.json
+.vscode/c_cpp_properties.json
+
+# Local STM32CubeIDE/Eclipse workspace
+.metadata/
+
+# Editor temporary files
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

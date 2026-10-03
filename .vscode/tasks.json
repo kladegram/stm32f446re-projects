@@ -1,0 +1,29 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // Walks up from the active file's folder to the nearest Makefile and runs `make flash` there
+      "label": "STM32 Make Flash",
+      "type": "process",
+      "command": "wsl",
+      "args": [
+        "--exec",
+        "sh",
+        "-c",
+        "d=\"$PWD\"; while [ ! -f \"$d/Makefile\" ]; do if [ \"$d\" = / ]; then echo 'No Makefile found above the active file' >&2; exit 1; fi; d=$(dirname \"$d\"); done; echo \"Project: $d\"; exec make -C \"$d\" flash"
+      ],
+      "options": {
+        "cwd": "${fileDirname}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    }
+  ]
+}
