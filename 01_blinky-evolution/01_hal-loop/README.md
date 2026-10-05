@@ -1,6 +1,6 @@
-# Blinky: bare-metal loop
+# Blinky: HAL loop
 
-The first step of the blinky series: a single polling `while (1)` loop with blocking delays and no RTOS.
+The first step of the blinky series: a single polling `while (1)` loop using STM32 HAL, with blocking delays and no RTOS. The next step, [bare-metal](../02_baremetal), will use direct register access.
 
 The green user LED blinks slowly (it toggles every 500 ms). While the blue user button is held down, it blinks fast (it toggles every 50 ms).
 
@@ -26,7 +26,7 @@ The button is checked only once per pass, so a press can take up to 500 ms to sh
 From this folder:
 
 ```sh
-make          # build to build/01_baremetal-loop.elf, .hex and .bin
+make          # build to build/01_hal-loop.elf, .hex and .bin
 make flash    # build, then write the .bin to the board
 make clean    # delete build/
 ```
