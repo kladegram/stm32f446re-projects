@@ -1,6 +1,6 @@
 # Blinky: HAL loop
 
-The first step of the blinky series: a single polling `while (1)` loop using STM32 HAL, with blocking delays and no RTOS. The next step, [bare-metal](../02_baremetal), will use direct register access.
+The first step of the blinky series: a single polling `while (1)` loop using STM32 HAL, with blocking delays and no RTOS. The next step, [bare-metal](../02_baremetal), uses direct register access.
 
 The green user LED blinks slowly (it toggles every 500 ms). While the blue user button is held down, it blinks fast (it toggles every 50 ms).
 

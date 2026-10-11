@@ -53,6 +53,7 @@ static void systick_init(void)
    * The CPU uses the default 16 MHz HSI clock after reset.
    * 16,000,000 cycles/s / 1,000 ticks/s = 16,000 cycles per millisecond.
    * Using 16,000 - 1 because the period is RELOAD + 1 cycles.
+   * Note: values ​​can be in decimal, hexadecimal, or binary format; the hardware receives the same bits.
    */
   SYST_RVR = 16000 - 1;
 
