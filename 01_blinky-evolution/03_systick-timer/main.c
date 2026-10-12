@@ -1,3 +1,10 @@
+/*
+ * SysTick millisecond timer and LED toggle on the NUCLEO-F446RE.
+ *
+ * Reference: ST PM0214, "SysTick timer";
+ * ST RM0390, RCC and GPIO register descriptions.
+ */
+
 #include <stdint.h>
 
 /* GPIO registers: see ../02_baremetal/main.c for details. */
@@ -11,8 +18,6 @@
 /*
  * SysTick is a 24-bit down-counter built into the Cortex-M4 core.
  * Its registers use fixed core addresses, independent of the GPIO/RCC buses.
- *
- * Reference: ST PM0214, "SysTick timer"
  */
 
 /* Control/status register: enables the timer, interrupt, and clock source. */
@@ -29,11 +34,13 @@
  */
 static volatile uint32_t milliseconds = 0;
 
+/* Prepare the onboard LED */
 static void gpio_init(void)
 {
-  /* Enable GPIOA and configure PA5 as an output. */
+  /* Enable the GPIOA clock */
   RCC_AHB1ENR |= (1U << 0);
 
+  /* Configure PA5 as an output */
   GPIOA_MODER &= ~(3U << (5 * 2));
   GPIOA_MODER |= (1U << (5 * 2));
 }

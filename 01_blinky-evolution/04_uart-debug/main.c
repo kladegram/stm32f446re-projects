@@ -1,18 +1,24 @@
 
 /*
  * USART2 debug output and LED toggle on the NUCLEO-F446RE.
-
+ *
  * Reference: ST RM0390, RCC, GPIO and USART register descriptions;
  * STM32F446 datasheet: Alternate function mapping;
  * UM1724 user manual: "USART communication" (USART2 → PA2/PA3 → ST-LINK → USB → computer).
  *
- * Enable the USART clock.
-  Enable the GPIO clock.
-  Connect the pin to the USART using its alternate function.
-  Configure the communication format and baud rate.
-  Enable USART and its transmitter.
-  Wait for room in the data register, then write a byte.
+ * Steps:
+ *   1. Enable the USART clock.
+ *   2. Enable the GPIO clock.
+ *   3. Connect the pin to the USART using its alternate function.
+ *   4. Configure the communication format and baud rate.
+ *   5. Enable USART and its transmitter.
+ *   6. Wait for room in the data register, then write a byte.
  */
+
+/*
+ * ST's CMSIS header provides register names and bit masks for this chip
+ */
+#include "stm32f4xx.h"
 
 /* USART2 uses the chip's built-in 16 MHz clock, from the "Embedded bootloader" section */
 #define PCLK1_HZ 16000000U
@@ -27,12 +33,7 @@
 #define BLINK_DELAY 1000000U
 
 /*
- * ST's device header supplies register addresses, types and named bit masks.
- */
-#include "stm32f4xx.h"
-
-/*
- * Configure USART2 for transmit-only asynchronous UART operation.
+ * Configure USART2 for transmit-only asynchronous UART operation
  */
 void USART2_Init(void)
 {
@@ -47,6 +48,8 @@ void USART2_Init(void)
 
   /*
    * Switch on GPIO port A's clock before configuring or using its pins.
+   * This enables the clock for all GPIOA pins, including PA2 (USART2_TX)
+   * and PA5 (the onboard LED). Each pin's mode is configured separately.
    *
    * RCC = Reset and Clock Control, which manages the chip's clocks.
    * AHB1ENR = clock Enable Register for bus AHB1, where GPIOA is connected.

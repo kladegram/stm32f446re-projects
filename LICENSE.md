@@ -25,3 +25,6 @@ SOFTWARE.
 Code from STMicroelectronics and Arm (each project's `Drivers/` folder and
 CubeMX-generated files) keeps its own license. See the `LICENSE.txt` files and
 the notices in those files.
+
+The vendored FreeRTOS kernel in `01_blinky-evolution/05_freertos-tasks/FreeRTOS-Kernel/`
+keeps its MIT license. See that directory's `LICENSE.md` and source notices.
