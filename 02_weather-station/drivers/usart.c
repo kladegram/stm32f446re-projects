@@ -1,0 +1,139 @@
+#include "usart.h"
+
+/**
+ * UM1724: Table 19. ARDUINO® connectors on NUCLEO-F446RE
+ *
+ *    Pin   Pin name    STM32 pin   Function
+ *    --------------------------------------
+ *    2     D1          PA2         USART2_TX
+ *    1     D0          PA3         USART2_RX
+ *
+ */
+/**
+ * RM0390: STM32F446xx register boundary addresses
+ *
+ *    Boundary address              Peripheral    Bus
+ *    -------------------------------------------------
+ *    0x40004400 - 0x400047FF       USART2        APB1
+ *
+ */
+#define RCC_BASE 0x40023800
+#define RCC_AHB1ENR *(volatile uint32_t *)(RCC_BASE + 0x30)
+#define RCC_APB1ENR *(volatile uint32_t *)(RCC_BASE + 0x40)
+
+#define GPIOA_BASE 0x40020000
+#define GPIOA_MODER *(volatile uint32_t *)(GPIOA_BASE + 0x00)
+#define GPIOA_AFRL *(volatile uint32_t *)(GPIOA_BASE + 0x20)
+
+#define USART2_TX_PIN 2U
+
+#define USART2_BASE 0x40004400
+#define USART2_CR1 *(volatile uint32_t *)(USART2_BASE + 0x0C)
+#define USART2_CR2 *(volatile uint32_t *)(USART2_BASE + 0x10)
+#define USART2_BRR *(volatile uint32_t *)(USART2_BASE + 0x08)
+#define USART2_DR *(volatile uint32_t *)(USART2_BASE + 0x04)
+#define USART2_SR *(volatile uint32_t *)(USART2_BASE + 0x00)
+
+/*
+
+    RM0390: 25.4.2 Transmitter
+    ===
+
+    Procedure:
+    1. Enable the USART by writing the UE bit in USART_CR1 register to 1.
+    2. Program the M bit in USART_CR1 to define the word length.
+    3. Program the number of stop bits in USART_CR2.
+    4. Select DMA enable (DMAT) in USART_CR3 if Multi buffer Communication is to
+    take place. Configure the DMA register as explained in multibuffer
+    communication.
+    5. Select the desired baud rate using the USART_BRR register.
+    6. Set the TE bit in USART_CR1 to send an idle frame as first transmission.
+    7. Write the data to send in the USART_DR register (this clears the TXE
+   bit). Repeat this for each data to be transmitted in case of single buffer.
+
+*/
+void usart_init(void) {
+  // ^^ Step 1: Enable the clock for the UART GPIOs
+  // Enable port A clock (Bit 0 GPIOAEN: IO port A clock enable)
+  RCC_AHB1ENR |= (1U << 0);
+
+  // Enable USART2 clock (Bit 17 USART2EN: USART2 clock enable)
+  RCC_APB1ENR |= (1U << 17);
+
+  // ^^ Step2: Configure the UART TX/RX pins as alternate function
+  /*
+
+    RM0390: 7.3.1 General-purpose I/O (GPIO)
+    ===
+
+    During and just after reset, the alternate functions are not active and the
+    I/O ports are configured in input floating mode.
+
+
+    RM0390: 7.3.2 I/O pin multiplexer and mapping
+    ===
+
+    Each I/O pin has a multiplexer with sixteen alternate function inputs (AF0
+    to AF15) that can be configured through the GPIOx_AFRL (for pin 0 to 7) and
+    GPIOx_AFRH (for pin 8 to 15)
+
+    Alternate function
+      – Configure the desired I/O as an alternate function in the GPIOx_MODER
+      register
+      – Select the type, pull-up/pull-down and output speed via the
+      GPIOx_OTYPER, GPIOx_PUPDR and GPIOx_OSPEEDER registers, respectively
+      – Connect the I/O to the desired AFx in the GPIOx_AFRL or GPIOx_AFRH
+      register
+*/
+
+  // Select I/O direction for PA2 - 10: Alternate function mode
+  GPIOA_MODER &= ~(3U << (USART2_TX_PIN * 2));
+  GPIOA_MODER |= (2U << (USART2_TX_PIN * 2));
+
+  // RM0390: 7.4.9 GPIO alternate function low register (GPIOx_AFRL)
+  // ===
+  // 0111: AF7
+
+  GPIOA_AFRL &= ~(15U << (USART2_TX_PIN * 4));
+  GPIOA_AFRL |= (7U << (USART2_TX_PIN * 4));
+
+  // ^^ Step3: Configure UART
+  // 3.1: Enable the USART by writing the UE bit in USART_CR1 register to 1
+  USART2_CR1 |= (1U << 13);
+
+  // 3.2: Program the M bit in USART_CR1 to define the word length
+  USART2_CR1 &= ~(1U << 12); // 0: 1 Start bit, 8 Data bits, n Stop bit
+
+  // 3.3: Program the number of stop bits in USART_CR2
+  USART2_CR2 &= ~(3U << 12); // 00: 1 Stop bit
+
+  // 3.4: Select the desired baud rate using the USART_BRR register
+  /*
+      16 MHz peripheral clock -> target baud rate 115200
+      USARTDIV = 16000000 / (16 * 115200) = 8.6805
+      DIV_Mantissa = 8
+      DIV_Fraction = 0.6805 * 16 = 10.888 -> 11 (because 11/16 is close enough)
+  */
+  USART2_BRR &= ~(0xFFFF << 0);
+  USART2_BRR |= (11U << 0);
+  USART2_BRR |= (8U << 4);
+
+  // 4: Set the TE bit in USART_CR1 to send an idle frame as first transmission
+  USART2_CR1 |= (1U << 3);
+}
+
+void usart_write_char(char c) {
+  // Bit 7 TXE: Transmit data register empty
+  while ((USART2_SR & (1 << 7)) == 0) {
+  }
+
+  // 5: Write the data to send in the USART_DR register (this clears the TXE
+  // bit)
+  USART2_DR = (uint8_t)c;
+}
+
+void usart_write_string(const char *s) {
+  while (*s != '\0') {
+    usart_write_char(*s++);
+  }
+}

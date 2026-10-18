@@ -1,0 +1,59 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "STM32 Weather Station (GDB)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/02_weather-station/build/firmware.elf",
+      "cwd": "${workspaceFolder}/02_weather-station",
+      "preLaunchTask": "STM32 Weather Build",
+      "MIMode": "gdb",
+      "targetArchitecture": "arm",
+      "miDebuggerPath": "${env:USERPROFILE}/.vscode/extensions/chipcode-nl.gcc-arm-windows-1.0.1/bin/arm-none-eabi-gdb.exe",
+      "debugServerPath": "${env:WINDIR}/Sysnative/wsl.exe",
+      "debugServerArgs": "--exec st-util --no-reset -p 4242",
+      "serverStarted": "Listening at \\*:4242",
+      "filterStdout": true,
+      "filterStderr": true,
+      "serverLaunchTimeout": 20000,
+      "externalConsole": false,
+      "avoidWindowsConsoleRedirection": true,
+      "sourceFileMap": {
+        "/mnt/c/": "C:/"
+      },
+      "hardwareBreakpoints": {
+        "require": true,
+        "limit": 6
+      },
+      "customLaunchSetupCommands": [
+        {
+          "text": "-file-exec-and-symbols \"${workspaceFolder}/02_weather-station/build/firmware.elf\"",
+          "description": "Load firmware and C debug symbols into GDB",
+          "ignoreFailures": false
+        },
+        {
+          "text": "-target-select remote localhost:4242",
+          "description": "Connect GDB to the ST-LINK server in WSL",
+          "ignoreFailures": false
+        },
+        {
+          "text": "-interpreter-exec console \"monitor reset\"",
+          "description": "Reset the microcontroller before programming",
+          "ignoreFailures": false
+        },
+        {
+          "text": "-target-download",
+          "description": "Flash the freshly built firmware",
+          "ignoreFailures": false
+        },
+        {
+          "text": "-break-insert -t main",
+          "description": "Stop at main before starting the application",
+          "ignoreFailures": false
+        }
+      ],
+      "launchCompleteCommand": "exec-continue"
+    }
+  ]
+}

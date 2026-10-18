@@ -1,0 +1,8 @@
+# Prettier-like C style: 2 spaces, braces on the same line, 80 columns.
+BasedOnStyle: LLVM
+
+# Indent "case" inside "switch", as Prettier does.
+IndentCaseLabels: true
+
+# Keep function bodies on their own lines, as Prettier does.
+AllowShortFunctionsOnASingleLine: Empty
