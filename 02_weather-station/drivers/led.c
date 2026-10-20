@@ -22,13 +22,20 @@ void led_init(void) {
   RCC_AHB1ENR |= (1U << 0);
 
   // Select I/O direction for PA5 - 01: General purpose output mode
-  GPIOA_MODER &= ~(3U << (LED_PIN * 2));
-  GPIOA_MODER |= (1U << (LED_PIN * 2));
+  GPIOA_MODER = (GPIOA_MODER & ~(3U << (LED_PIN * 2))) | (1U << (LED_PIN * 2));
 }
 
 void led_toggle(void) {
   // Toggle PA5 output level
   GPIOA_ODR ^= (1U << LED_PIN);
+}
+
+void led_turn_on(void) {
+  GPIOA_ODR |= (1U << LED_PIN);
+}
+
+void led_turn_off(void) {
+  GPIOA_ODR &= ~(1U << LED_PIN);
 }
 
 bool led_is_on(void) {

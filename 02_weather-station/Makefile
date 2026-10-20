@@ -24,7 +24,7 @@ LDFLAGS = $(MCU_FLAGS) -nostartfiles --specs=nano.specs --specs=nosys.specs \
           -Wl,--gc-sections,-z,noexecstack,-Map=$(BUILD_DIR)/$(TARGET).map
 LDLIBS = -lm
 
-C_SOURCES = main.c drivers/led.c drivers/button.c drivers/usart.c
+C_SOURCES = main.c drivers/led.c drivers/button.c drivers/usart.c drivers/timer.c
 OBJECTS = $(addprefix $(BUILD_DIR)/,$(C_SOURCES:.c=.o)) $(BUILD_DIR)/startup.o
 
 .PHONY: all flash clean

@@ -1,7 +1,17 @@
 #include "usart.h"
+#include <stdio.h>
 
 /**
- * UM1724: Table 19. ARDUINO® connectors on NUCLEO-F446RE
+ * UM1724: 7.10 USART communication
+ *
+ * The USART2 interface available on PA2 and PA3 of the STM32 microcontroller
+ * can be connected to ST-LINK MCU, ST morpho connector, or ARDUINO® connector.
+ *
+ */
+/**
+ * UM1724: 7.13 ARDUINO® connectors
+ *
+ * Table 19. ARDUINO® connectors on NUCLEO-F446RE
  *
  *    Pin   Pin name    STM32 pin   Function
  *    --------------------------------------
@@ -87,15 +97,18 @@ void usart_init(void) {
 */
 
   // Select I/O direction for PA2 - 10: Alternate function mode
-  GPIOA_MODER &= ~(3U << (USART2_TX_PIN * 2));
-  GPIOA_MODER |= (2U << (USART2_TX_PIN * 2));
+  GPIOA_MODER = (GPIOA_MODER & ~(3U << (USART2_TX_PIN * 2))) | (2U << (USART2_TX_PIN * 2));
+
+  // DS10693: Table 11. Alternate function
+  // ===
+  // PA2    SART2_TX    AF7
+  // PA3    USART2_RX   AF7
 
   // RM0390: 7.4.9 GPIO alternate function low register (GPIOx_AFRL)
   // ===
   // 0111: AF7
 
-  GPIOA_AFRL &= ~(15U << (USART2_TX_PIN * 4));
-  GPIOA_AFRL |= (7U << (USART2_TX_PIN * 4));
+  GPIOA_AFRL = (GPIOA_AFRL & ~(15U << (USART2_TX_PIN * 4))) | (7U << (USART2_TX_PIN * 4));
 
   // ^^ Step3: Configure UART
   // 3.1: Enable the USART by writing the UE bit in USART_CR1 register to 1
@@ -114,9 +127,7 @@ void usart_init(void) {
       DIV_Mantissa = 8
       DIV_Fraction = 0.6805 * 16 = 10.888 -> 11 (because 11/16 is close enough)
   */
-  USART2_BRR &= ~(0xFFFF << 0);
-  USART2_BRR |= (11U << 0);
-  USART2_BRR |= (8U << 4);
+  USART2_BRR = (USART2_BRR & ~(0xFFFF << 0)) | (11U << 0) | (8U << 4);
 
   // 4: Set the TE bit in USART_CR1 to send an idle frame as first transmission
   USART2_CR1 |= (1U << 3);
@@ -136,4 +147,10 @@ void usart_write_string(const char *s) {
   while (*s != '\0') {
     usart_write_char(*s++);
   }
+}
+
+void usart_write_int(int i) {
+  char t[16];
+  snprintf(t, sizeof(t), "%d", i);
+  usart_write_string(t);
 }

@@ -1,5 +1,6 @@
-# Prettier-like C style: 2 spaces, braces on the same line, 80 columns.
+# Prettier-like C style: 2 spaces, braces on the same line, 100 columns.
 BasedOnStyle: LLVM
+ColumnLimit: 100
 
 # Indent "case" inside "switch", as Prettier does.
 IndentCaseLabels: true

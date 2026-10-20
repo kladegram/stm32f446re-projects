@@ -21,11 +21,28 @@
 .word Default_Handler    /* PendSV */
 .word Default_Handler    /* SysTick */
 
-/* All 97 external IRQ entries use the default handler; polling needs no IRQs. */
+/* External Interrupts */
+/*
 .rept 97
 .word Default_Handler
 .endr
-
+*/
+/*
+.rept 28
+.word Default_Handler
+.endr
+.word     TIM2_IRQHandler                 
+.rept 68
+.word Default_Handler
+.endr
+*/
+.rept 40
+.word Default_Handler
+.endr
+.word     EXTI15_10_IRQHandler                 
+.rept 56
+.word Default_Handler
+.endr
 
 .section .text.Reset_Handler, "ax", %progbits
 .global Reset_Handler
