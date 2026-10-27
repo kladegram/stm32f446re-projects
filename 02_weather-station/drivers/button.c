@@ -9,9 +9,6 @@
  * DS10693: Figure 3. STM32F446xC/E block diagram
  *    GPIO PORT C is connected to AHB1
  *
- * Implementation of interrupts is followed by a tutorial from -
- *    https://vivonomicon.com/2018/04/28/bare-metal-stm32-programming-part-4-intro-to-hardware-interrupts/
- *
  * RM0390: Table 1. STM32F446xx register boundary addresses
  *    SYSCFG is connected to APB2
  */
@@ -70,10 +67,26 @@ void button_init(void) {
   // Bit 14 SYSCFGEN: System configuration controller clock enable
   RCC_APB2ENR |= (1U << 14);
 
+  /*
+    RM0390: 10.2.4 Functional description; Hardware interrupt selection
+    ===
+    To configure the 23 lines as interrupt sources, use the following procedure:
+      • Configure the mask bits of the 23 interrupt lines (EXTI_IMR)
+      • Configure the Trigger selection bits of the interrupt lines (EXTI_RTSR and EXTI_FTSR)
+      • Configure the enable and mask bits that control the NVIC IRQ channel mapped to the
+        external interrupt controller (EXTI) so that an interrupt coming from one of the 23 lines
+        can be correctly acknowledged
+
+    RM0390: 8 System configuration controller (SYSCFG)
+    ===
+    The system configuration controller is mainly used to remap the memory accessible in the
+    code area and to manage the external interrupt line connection to the GPIOs.
+  */
+
   // RM0390: 8.2.6 SYSCFG external interrupt configuration register 4 (SYSCFG_EXTICR4)
+  // These bits are written by software to select the source input for the EXTIx external interrupt.
   // Bits 15:0 EXTIx[3:0]: EXTI x configuration (x = 12 to 15)
-  //  0010: PC[x] pin
-  SYSCFG_EXTICR4 = (SYSCFG_EXTICR4 & ~(15U << 4)) | (2U << 4);
+  SYSCFG_EXTICR4 = (SYSCFG_EXTICR4 & ~(15U << 4)) | (2U << 4); // 0010: PC[x] pin
 
   // Setup the button's EXTI line as an interrupt
   EXTI_IMR |= (1U << BTN_PIN);
@@ -91,13 +104,12 @@ void button_init(void) {
 
 bool button_is_pressed(void) {
   return (GPIOC_IDR & (1U << BTN_PIN)) == 0U;
-  // return (EXTI_PR & (1U << BTN_PIN));
 }
 
 bool button_has_interrupt_pending(void) {
   return (EXTI_PR & (1U << BTN_PIN));
 }
 
-void button_clear_update_flag(void) {
-  EXTI_PR |= (1U << BTN_PIN);
+void button_clear_interrupt_flag(void) {
+  EXTI_PR = (1U << BTN_PIN);
 }

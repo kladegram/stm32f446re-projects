@@ -1,0 +1,412 @@
+
+
+#include "i2c.h"
+#include <stdio.h>
+
+#define RCC_BASE 0x40023800
+/*
+    UM1724: Table 19. ARDUINO® connectors on NUCLEO-F446RE
+    ===
+
+    Pin     Pin name    STM32 pin   Function
+    ----------------------------------------
+    10      D15         PB8         I2C1_SCL
+    9       D14         PB9         I2C1_SDA
+*/
+#define I2C1_SCL_PIN 8U // PB8
+#define I2C1_SDA_PIN 9U // PB9
+
+#define RCC_AHB1ENR *(volatile uint32_t *)(RCC_BASE + 0x30)
+
+#define GPIOB_BASE 0x40020400
+#define GPIOB_MODER *(volatile uint32_t *)(GPIOB_BASE + 0x00)
+#define GPIOB_AFRL *(volatile uint32_t *)(GPIOB_BASE + 0x20)
+#define GPIOB_AFRH *(volatile uint32_t *)(GPIOB_BASE + 0x24)
+#define GPIOB_OTYPER *(volatile uint32_t *)(GPIOB_BASE + 0x04)
+#define GPIOB_OSPEEDR *(volatile uint32_t *)(GPIOB_BASE + 0x08)
+
+/*
+    DS10693: Table 12. STM32F446xC/E register boundary addresses
+    ===
+    APB1    0x4000 5400 - 0x4000 57FF       I2C1
+*/
+#define RCC_APB1ENR *(volatile uint32_t *)(RCC_BASE + 0x40)
+
+#define I2C_BASE 0x40005400 // I2C1
+#define I2C_CR1 *(volatile uint32_t *)(I2C_BASE + 0x00)
+#define I2C_CR2 *(volatile uint32_t *)(I2C_BASE + 0x04)
+#define I2C_OAR1 *(volatile uint32_t *)(I2C_BASE + 0x08)
+#define I2C_OAR2 *(volatile uint32_t *)(I2C_BASE + 0x0C)
+#define I2C_DR *(volatile uint32_t *)(I2C_BASE + 0x10)
+#define I2C_SR1 *(volatile uint32_t *)(I2C_BASE + 0x14)
+#define I2C_SR2 *(volatile uint32_t *)(I2C_BASE + 0x18)
+#define I2C_CCR *(volatile uint32_t *)(I2C_BASE + 0x1C)
+#define I2C_TRISE *(volatile uint32_t *)(I2C_BASE + 0x20)
+#define I2C_FLTR *(volatile uint32_t *)(I2C_BASE + 0x24)
+
+void i2c_init(void) {
+  // Enable port B clock (Bit 1 GPIOBEN: IO port B clock enable)
+  RCC_AHB1ENR |= (1U << 1);
+
+  // Enable I2C1 clock (Bit 21 I2C1EN: I2C1 clock enable)
+  RCC_APB1ENR |= (1U << 21);
+
+  // Select I/O direction; 10: Alternate function mode
+  GPIOB_MODER = (GPIOB_MODER & ~(3U << (I2C1_SCL_PIN * 2))) | (2U << (I2C1_SCL_PIN * 2));
+  GPIOB_MODER = (GPIOB_MODER & ~(3U << (I2C1_SDA_PIN * 2))) | (2U << (I2C1_SDA_PIN * 2));
+
+  // Connect the I/O to the desired AFx
+  /*
+    DS10693: Table 11. Alternate function
+    ===
+    PB8     I2C1_SCL    AF4
+    PB9     I2C1_SDA    AF4
+*/
+  GPIOB_AFRH = (GPIOB_AFRH & ~(15U << 0)) | (4U << 0);
+  GPIOB_AFRH = (GPIOB_AFRH & ~(15U << 4)) | (4U << 4);
+
+  // Set output open-drain
+  GPIOB_OTYPER |= (1U << I2C1_SCL_PIN) | (1U << I2C1_SDA_PIN);
+
+  // Output speed; 11: High speed
+  GPIOB_OSPEEDR |= (3U << (I2C1_SCL_PIN * 2)) | (3U << (I2C1_SDA_PIN * 2));
+
+  /*
+    RM0390: 24.3.3 I2C controller mode
+    ===
+    The following is the required sequence in controller mode.
+        • Program the peripheral input clock in I2C_CR2 Register to generate correct timings
+        • Configure the clock control registers
+        • Configure the rise time register
+        • Program the I2C_CR1 register to enable the peripheral
+        • Set the START bit in the I2C_CR1 register to generate a Start condition
+  */
+
+  // Set peripheral clock frequency
+  // The FREQ bits must be configured with the APB clock frequency value (I2C peripheral connected
+  // to APB).
+  I2C_CR2 = (I2C_CR2 & ~0b111111U) | (16U << 0);
+
+  /*
+    RM0390: 24.6.8 I2C clock control register (I2C_CCR)
+    ===
+
+    Thigh = CCR * TPCLK1
+    Thigh = tr(SCL) + tw(SCLH)
+
+    CCR * TPCLK1 = tr(SCL) + tw(SCLH)
+    CCR = (tr(SCL) + tw(SCLH)) / TPCLK1;
+
+    Table 61. I2C characteristics
+    ---
+    tr(SCL)  = 1000 ns (Max)
+    tw(SCLH) = 4.0  µs (Min)
+
+    ^^ PCLK1 is APB1 clock
+    CCR = (1000 ns + 4.0 µs) / 16Mhz
+
+    ^^ T = 1/f
+    The period (T) is the time it takes for one complete cycle, while frequency (f) is the number of
+    cycles per unit of time
+    ---
+
+    CCR = 5000 ns / ( 1 / 16Mhz )
+    CCR = 5000 ns / 62.5 ns
+    CCR = 80
+
+  */
+  // Configure the clock control registers
+  I2C_CCR = (80U << 0);
+
+  // Configure the rise time register
+  /*
+    RM0390: 24.6.9 I2C TRISE register (I2C_TRISE)
+    ===
+
+    For instance: in Sm mode, the maximum allowed SCL rise time is 1000 ns. If, in the
+    I2C_CR2 register, the value of FREQ[5:0] bits is equal to 0x08 and TPCLK1 = 125 ns, the
+    TRISE[5:0] bits must be programmed with 09h (1000 ns / 125 ns = 8 + 1)
+
+    (1000 / 62.5) + 1 = 17
+  */
+  I2C_TRISE = 17U;
+
+  // Program the I2C_CR1 register to enable the peripheral
+  I2C_CR1 |= (1U << 0);
+}
+
+void i2c_generate_start(uint8_t address) {
+  /*
+    RM0390: 24.3.1 Mode selection; Communication flow
+    ===
+
+    A serial data transfer always begins with a start condition and ends with a stop condition.
+
+    The controller can decide to enter Transmitter or Receiver mode depending on the LSB of the
+    target address sent.
+  */
+  /*
+    RM0390: 24.3.3 I2C controller mode; Start condition
+    ===
+
+    Setting the START bit causes the interface to generate a Start condition and to switch to
+    controller mode (MSL bit set) when the BUSY bit is cleared.
+
+    Once the Start condition is sent, the SB bit is set by hardware.
+
+    Then the controller waits for a read of the SR1 register followed by a write in the DR register
+    with the target address
+  */
+  //^^ Step1: Set the START bit in the I2C_CR1 register to generate a Start condition
+  I2C_CR1 |= (1 << 8); // Bit 8 START: Start generation
+
+  //^^ Step2: Wait while start condition is sent, the SB bit is set by hardware
+  while (!(I2C_SR1 & (1 << 0))) {
+    // Bit 0 SB: Start bit (controller mode)
+    //    0: No Start condition
+    //    1: Start condition generated.
+  };
+
+  //^^ Step3: Write target address in the DR register
+  I2C_DR = address;
+
+  /*
+    RM0390: 24.3.3 I2C controller mode; Target address transmission
+    ===
+
+    As soon as the address byte is sent, the ADDR bit is set by hardware.
+
+    Then the controller waits for a read of the SR1 register followed by a read of the SR2 register
+
+    The controller can decide to enter Transmitter or Receiver mode depending on the LSB of the
+    target address sent. In 7-bit addressing mode
+      – To enter Transmitter mode, a controller sends the target address with LSB reset.
+      – To enter Receiver mode, a controller sends the target address with LSB set
+
+  */
+  //^^ Step4: Wait until received address matched
+  while (!(I2C_SR1 & (1 << 1))) {
+    // Bit 1 ADDR: Address sent (controller mode)/matched (target mode)
+    //    0: Address mismatched or not received.
+    //    1: Received address matched.
+    //
+    // This bit is cleared by software reading SR1 register followed reading SR2
+  };
+}
+
+void i2c_clear_address(void) {
+  // Clear Address bit by reading SR1 register followed reading SR2
+  (void)I2C_SR1;
+  (void)I2C_SR2;
+}
+
+void i2c_write(uint8_t address, uint8_t *p_data, uint16_t size) {
+  if (!size) {
+    return;
+  }
+
+  // Wait until BUSY bit is cleared.
+  while ((I2C_SR2 & (1U << 1))) {
+    // Bit 1 BUSY: Bus busy
+    //    0: No communication on the bus
+    //    1: Communication ongoing on the bus
+  }
+
+  i2c_generate_start(address << 1);
+
+  // Set ACK high
+  I2C_CR1 |= (1U << 10);
+
+  i2c_clear_address();
+
+  for (uint16_t i = 0; i < size; i++) {
+
+    /*
+      RM0390: 24.3.3 I2C controller mode; Controller transmitter
+      ===
+
+      Following the address transmission and after clearing ADDR, the controller sends bytes from
+      the DR register
+
+      The controller waits until the first data byte is written into I2C_DR
+
+      When the acknowledge pulse is received, the TxE bit is set by hardware
+    */
+    // Wait until data register is empty
+    while (!(I2C_SR1 & (1 << 7))) {
+      // Bit 7 TxE: Data register empty (transmitters)
+      //     0: Data register not empty
+      //     1: Data register empty
+
+      // Cleared
+      //    - by software writing to the DR register
+      //    - or by hardware after a start or a stop condition.
+
+      // Set when DR is empty in transmission
+    }
+
+    I2C_DR = *(p_data + i);
+  }
+
+  /*
+
+    RM0390: 24.3.3 I2C controller mode; Closing the communication
+    ===
+
+    Stop condition should be programmed during EV8_2 event, when either TxE or BTF is set.
+
+  */
+
+  // Wait until data byte transfer succeeded
+  while (!(I2C_SR1 & (1 << 2))) {
+    // Bit 2 BTF: Byte transfer finished
+    //    0: Data byte transfer not done
+    //    1: Data byte transfer succeeded
+  }
+
+  i2c_generate_stop();
+}
+
+void i2c_generate_stop(void) {
+  /*
+    RM0390: 24.3.3 I2C controller mode; Closing the communication
+    ===
+
+    After the last byte is written to the DR register, the STOP bit is set by software to generate a
+    Stop condition
+
+    Stop condition should be programmed during EV8_2 event, when either TxE or BTF is set
+
+
+    The interface automatically goes back to target mode (MSL bit cleared)
+  */
+  I2C_CR1 |= (1 << 9); // Bit 9 STOP: Stop generation
+}
+
+void i2c_read(uint8_t address, uint8_t *buff, uint16_t size) {
+  if (!size) {
+    return;
+  }
+
+  // Wait until BUSY bit is cleared.
+  while ((I2C_SR2 & (1U << 1))) {
+    // Bit 1 BUSY: Bus busy
+    //    0: No communication on the bus
+    //    1: Communication ongoing on the bus
+  }
+
+  i2c_generate_start((address << 1) | (1 << 0));
+
+  /*
+
+    RM0390: 24.3.3 I2C controller mode; Controller receiver
+    ===
+
+    In this mode, the interface receives bytes from the SDA line into the DR register via the
+    internal shift register. After each byte the interface generates in sequence:
+        1. An acknowledge pulse if the ACK bit is set
+        2. The RxNE bit is set
+  */
+
+  if (size == 1U) {
+    /*
+
+      RM0390: 24.3.3 I2C controller mode; Closing the communication
+      ===
+
+      In case a single byte has to be received, the Acknowledge disable is made during EV6
+      (before the ADDR flag is cleared) and the STOP condition generation is made after EV6.
+
+    */
+    // Set ACK low, set POS low
+    I2C_CR1 &= ~(1U << 10);
+    I2C_CR1 &= ~(1U << 11);
+
+    i2c_clear_address();
+    i2c_generate_stop();
+
+    while (!(I2C_SR1 & (1U << 6))) {
+      // Bit 6 RxNE: Data register not empty (receivers)
+      //    0: Data register empty
+      //    1: Data register not empty
+    }
+
+    buff[0] = (uint8_t)I2C_DR;
+
+    return;
+  }
+
+  /*
+    RM0390: Closing the communication
+    ===
+
+    The procedures described below are recommended if the EV7-1 software sequence is not
+    completed before the ACK pulse of the current byte transfer.
+
+    These procedures must be followed to make sure that the ACK bit is set low on time before
+    the end of the last data reception, and the STOP bit is set high after the last data reception
+    without reception of supplementary data.
+
+  */
+
+  if (size == 2U) {
+    // RM0390: 2-byte reception
+    // ===
+
+    // Set ACK low, set POS high
+    I2C_CR1 &= ~(1U << 10);
+    I2C_CR1 |= (1U << 11);
+
+    // Clear ADDR flag
+    i2c_clear_address();
+  }
+
+  if (size > 2U) {
+    // Set ACK high, set POS low
+    I2C_CR1 |= (1U << 10);
+    I2C_CR1 &= ~(1U << 11);
+
+    // Clear ADDR flag
+    i2c_clear_address();
+
+    for (uint16_t i = 0; i < (size - 3); i++) {
+      while (!(I2C_SR1 & (1 << 6))) {
+        // Bit 6 RxNE: Data register not empty (receivers)
+        //    0: Data register empty
+        //    1: Data register not empty
+      }
+
+      buff[i] = (uint8_t)I2C_DR;
+    }
+
+    // RM0390: N > 2-byte reception, from N-2 data reception
+    // ===
+
+    // Wait until BTF = 1
+    while (!(I2C_SR1 & (1 << 2))) {
+      // Bit 2 BTF: Byte transfer finished
+      //    0: Data byte transfer not done
+      //    1: Data byte transfer succeeded
+    }
+
+    // Set ACK low
+    I2C_CR1 &= ~(1U << 10);
+
+    // Read data N-2
+    buff[size - 3] = I2C_DR;
+  }
+
+  // Wait until BTF = 1
+  while (!(I2C_SR1 & (1U << 2))) {
+    // Bit 2 BTF: Byte transfer finished
+    //    0: Data byte transfer not done
+    //    1: Data byte transfer succeeded
+  }
+
+  // Set STOP high
+  i2c_generate_stop();
+
+  // Read data N-1 and N
+  buff[size - 2] = I2C_DR;
+  buff[size - 1] = I2C_DR;
+}

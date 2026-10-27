@@ -60,9 +60,9 @@ void timer_enable_interrupt(void) {
    *
    * Vector table for STM32F446xx
    *
-   * Position   Priority  Type of priority    Acronym   Address
-   * --------------------------------------------------------------
-   * 28         35        Settable            TIM2      0x0000 00B0
+   * Position   Priority    Acronym   Address
+   * --------------------------------------------
+   * 28         35          TIM2      0x0000 00B0
    */
   /**
    * PM0214: 4.3.2 Interrupt set-enable register x (NVIC_ISERx)
@@ -77,8 +77,8 @@ void timer_enable_interrupt(void) {
    * Address                      Name
    * 0xE000E100 - 0xE000E11F      NVIC_ISER0 - NVIC_ISER7
    */
-  // Enable TIM2 interrupt, its position is "28"
-  *(volatile uint32_t *)(0xE000E100) |= (1U << 28);
+  // Enable TIM2 ("TIM2_IRQHandler") interrupt, its position is "28"
+  *(volatile uint32_t *)(0xE000E100 + 0x04 * 0) |= (1U << 28);
 
   // Usage example:
   //

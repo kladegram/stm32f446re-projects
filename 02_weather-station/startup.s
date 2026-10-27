@@ -36,9 +36,11 @@
 .word Default_Handler
 .endr
 */
-.rept 40
+.rept 38
 .word Default_Handler
 .endr
+.word     USART2_IRQHandler
+.word Default_Handler
 .word     EXTI15_10_IRQHandler                 
 .rept 56
 .word Default_Handler
