@@ -17,3 +17,4 @@ typedef struct {
 
 bool ring_buff_push(ring_buff_t *r, uint8_t value);
 bool ring_buff_pop(ring_buff_t *r, uint8_t *value);
+bool ring_buff_is_empty(ring_buff_t *r);

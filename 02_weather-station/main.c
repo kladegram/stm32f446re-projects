@@ -1,29 +1,35 @@
 /**
  * No-AI challenge - reading docs, some Googling, and writing by hand
  */
+#include "stm32f446xx.h"
 #include <stdint.h>
 
 #include "lib/ring_buffer.h"
 
+#include "drivers/aht20.h"
 #include "drivers/button.h"
-#include "drivers/i2c.h"
 #include "drivers/led.h"
 #include "drivers/timer.h"
 #include "drivers/usart.h"
 
-#define T_ADDRESS (uint8_t)0x38
-
 ring_buff_t uart_rx_buffer = {0};
+bool is_reading_requested = true;
 
 void USART2_IRQHandler(void) {
   char c;
 
   if (usart_read_char(&c)) {
+    // Ignore repeated sensor reading requests
+    if (c == 'r' && aht20_is_busy()) {
+      return;
+    }
+
     ring_buff_push(&uart_rx_buffer, (uint8_t)c);
   }
 }
 
 void EXTI15_10_IRQHandler(void) {
+  // Check if user button triggered this interrupt
   if (button_has_interrupt_pending()) {
     led_toggle();
     button_clear_interrupt_flag();
@@ -46,138 +52,64 @@ void process_uart_rx_buffer() {
         break;
 
         break;
+
+      case 'r':
+        is_reading_requested = true;
+
+        break;
     }
   }
 }
 
-enum STATE {
-  T_WAIT_FOR_POWER_ON,
-  T_TRIGGER_INIT,
-  T_WAIT_FOR_INIT,
-  T_TRIGGER_MEASUMERENT,
-  T_WAIT_FOR_MEASUMERENT,
-  T_CHECK_MEASUMERENT_STATUS,
-  T_READ_MEASUMERENT_DATA,
-  IDLE
-};
-
-uint8_t t_init_commands[3] = {0xBE, 0x08, 0x00};
-uint8_t t_measure_commands[3] = {0xAC, 0x33, 0x00};
+// TODO: infinite loop on missing sensor
 
 int main(void) {
+  // RM0390: 33.16.1 Debug support for low-power modes
+  *(volatile uint32_t *)(0xE0042004) |= (1 << 0);
+
   usart_init();
   led_init();
   button_init();
   timer_init();
-  i2c_init();
-
-  usart_write_string("<<< \r\n");
 
   timer_start();
 
-  uint32_t previous = timer_get_ms();
+  aht20_init((uint8_t)0x38);
 
-  /*
-    AHT20 Product manual; Sensor reading process
-    ===
-
-    1. Wait 40ms after power-on.
-
-    Before reading the temperature and humidity values, first check whether the calibration
-    enable bit Bit [3] of the status word is 1 (you can get a byte of status word by sending 0x71).
-
-    If not 1, need to send 0xbe command (for initialization), this command parameter has
-    two bytes, the first byte is 0x08, the second byte is 0x00, and then **wait for 10ms**.
-
-    2. Send the 0xAC command directly (trigger measurement).
-    The parameter of this command has two bytes, the first byte
-    is 0x33 and the second byte is 0x00.
-
-    3. Wait for 80ms to wait for the measurement to be completed.
-    If the read status word Bit [7] is 0, it indicates that the
-    measurement is completed, and then six bytes can be read
-    in a row; otherwise, continue to wait.
-
-    4. After receiving six bytes, the next byte is the CRC check
-    data, the user can read it as needed
-  */
-
-  enum STATE state = T_WAIT_FOR_POWER_ON;
-
-  // TODO: infinite loop on missing sensor
+  usart_write_string("\r\n=== Weather Station ===\r\n");
 
   while (1) {
     process_uart_rx_buffer();
 
-    uint32_t now = timer_get_ms();
-    uint32_t elapsed = (uint32_t)(now - previous);
+    if (is_reading_requested) {
+      if (!aht20_is_busy()) {
+        aht20_begin(timer_get_ms());
+      }
 
-    switch (state) {
-      case T_WAIT_FOR_POWER_ON: {
-        if (elapsed > 40) {
-          state = T_TRIGGER_INIT;
-        }
-
-      } break;
-
-      case T_TRIGGER_INIT: {
-        i2c_write(T_ADDRESS, t_init_commands, 3);
-
-        state = T_WAIT_FOR_INIT;
-        previous = now;
-
-      } break;
-
-      case T_WAIT_FOR_INIT: {
-        if (elapsed > 10) {
-          state = T_TRIGGER_MEASUMERENT;
-        }
-      } break;
-
-      case T_TRIGGER_MEASUMERENT: {
-        i2c_write(T_ADDRESS, t_measure_commands, 3);
-
-        state = T_WAIT_FOR_MEASUMERENT;
-        previous = now;
-
-      } break;
-
-      case T_WAIT_FOR_MEASUMERENT: {
-        if (elapsed > 80) {
-          state = T_CHECK_MEASUMERENT_STATUS;
-        }
-      } break;
-
-      case T_CHECK_MEASUMERENT_STATUS: {
-        uint8_t buffer[1];
-
-        i2c_read(T_ADDRESS, buffer, sizeof buffer);
-
-        // If bit [7] is 0, it indicates that the measurement is completed
-        if ((buffer[0] & (1U << 7)) == 0) {
-          state = T_READ_MEASUMERENT_DATA;
-        }
-
-      } break;
-
-      case T_READ_MEASUMERENT_DATA: {
-        uint8_t buffer[6];
-
-        i2c_read(T_ADDRESS, buffer, sizeof buffer);
-
-        // Temperature data are located in the 3rd (partially), 4th, and 5th bytes of the reading
-        uint32_t data = ((buffer[3] & 0b00001111) << 16) | (buffer[4] << 8) | buffer[5];
-
-        usart_write_string("temperature: ");
-        usart_write_float((float)(((data / 1048576.0f) * 200) - 50));
-        usart_write_string("C\r\n");
-
-        state = IDLE;
-      } break;
-
-      case IDLE: {
-        // wait
-      } break;
+      is_reading_requested = false;
     }
+
+    if (aht20_is_busy()) {
+      aht20_update(timer_get_ms());
+    }
+
+    float readings[2];
+
+    if (aht20_take_reading(readings)) {
+      usart_write_string("Humidity: ");
+      usart_write_float(readings[0]);
+      usart_write_string("%\r\n");
+      usart_write_string("Temperature: ");
+      usart_write_float(readings[1]);
+      usart_write_string("C\r\n");
+    }
+
+    __disable_irq();
+
+    if (!aht20_is_busy() && !is_reading_requested && ring_buff_is_empty(&uart_rx_buffer)) {
+      __WFI();
+    }
+
+    __enable_irq();
   }
 }
