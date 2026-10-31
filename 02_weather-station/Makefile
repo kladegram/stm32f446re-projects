@@ -53,7 +53,7 @@ $(BUILD_DIR)/$(TARGET).hex: $(BUILD_DIR)/$(TARGET).elf
 	$(OBJCOPY) -O ihex $< $@
 
 flash: $(BUILD_DIR)/$(TARGET).bin
-	$(ST_FLASH) --reset write $< 0x08000000
+	$(ST_FLASH) --connect-under-reset --reset write $< 0x08000000
 
 clean:
 	rm -rf $(BUILD_DIR)

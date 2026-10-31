@@ -44,12 +44,12 @@ void process_uart_rx_buffer() {
       case 't':
         usart_write_int((int)timer_get_ms());
         usart_write_string("\r\n");
+
         break;
 
       case 'l':
         usart_write_string((led_is_on() ? "LED is ON" : "LED is OFF"));
         usart_write_string("\r\n");
-        break;
 
         break;
 
@@ -61,8 +61,6 @@ void process_uart_rx_buffer() {
   }
 }
 
-// TODO: infinite loop on missing sensor
-
 int main(void) {
   // RM0390: 33.16.1 Debug support for low-power modes
   *(volatile uint32_t *)(0xE0042004) |= (1 << 0);
@@ -72,6 +70,7 @@ int main(void) {
   button_init();
   timer_init();
 
+  // Note: i2c depends on the timer
   timer_start();
 
   aht20_init((uint8_t)0x38);
@@ -82,10 +81,7 @@ int main(void) {
     process_uart_rx_buffer();
 
     if (is_reading_requested) {
-      if (!aht20_is_busy()) {
-        aht20_begin(timer_get_ms());
-      }
-
+      aht20_begin(timer_get_ms());
       is_reading_requested = false;
     }
 
@@ -104,6 +100,12 @@ int main(void) {
       usart_write_string("C\r\n");
     }
 
+    if (aht20_take_error()) {
+      usart_write_string("Error reading data\r\n");
+    }
+
+    // Safely put the CPU into a low-power sleep mode without missing incoming events
+    // TODO: implement "Standby" mode and Wakeup pin
     __disable_irq();
 
     if (!aht20_is_busy() && !is_reading_requested && ring_buff_is_empty(&uart_rx_buffer)) {
