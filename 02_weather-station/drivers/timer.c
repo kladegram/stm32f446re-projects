@@ -36,9 +36,8 @@ void timer_init(void) {
   // Avoid generating an update event immediately after intialization
   // https://community.st.com/stm32-mcus-embedded-software-32/why-does-a-timer-operating-in-interrupt-mode-generate-an-update-event-immediately-after-intialization-84019
   timer_clear_update_flag();
-}
 
-void timer_start(void) {
+  // ^^ Step5: Start!
   TIM2_CR1 |= (1U << 0); // Bit 0 CEN: Counter enable
 }
 
@@ -86,4 +85,29 @@ void timer_enable_interrupt(void) {
   //   led_toggle();
   //   timer_clear_update_flag();
   // }
+}
+
+void timer_delay_ms(uint32_t duration_ms) {
+  if (!duration_ms) {
+    return;
+  }
+
+  uint32_t start_ms = timer_get_ms();
+
+  while ((timer_get_ms() - start_ms) <= duration_ms) {
+    // wait
+  }
+}
+
+bool timer_wait_for(volatile const uint32_t *reg, uint32_t mask, bool wanted_set,
+                    uint32_t timeout_ms) {
+  uint32_t start_ms = timer_get_ms();
+
+  while ((bool)(*reg & mask) != wanted_set) {
+    if ((timer_get_ms() - start_ms) >= timeout_ms) {
+      return false;
+    }
+  }
+
+  return true;
 }

@@ -22,9 +22,21 @@ ASFLAGS = $(MCU_FLAGS) -g3 -x assembler-with-cpp -MMD -MP
 LDFLAGS = $(MCU_FLAGS) -nostartfiles --specs=nano.specs --specs=nosys.specs \
           -Tlinker.ld \
           -Wl,--gc-sections,-z,noexecstack,-Map=$(BUILD_DIR)/$(TARGET).map
+LDFLAGS += -Wl,-u,_printf_float
 LDLIBS = -lm
 
-C_SOURCES = main.c drivers/led.c drivers/button.c drivers/usart.c drivers/timer.c lib/ring_buffer.c drivers/i2c.c drivers/aht20.c
+C_SOURCES = main.c   
+C_SOURCES += drivers/led.c
+C_SOURCES += drivers/button.c
+C_SOURCES += drivers/usart.c
+C_SOURCES += drivers/timer.c
+C_SOURCES += drivers/i2c.c
+C_SOURCES += drivers/aht20.c
+C_SOURCES += drivers/spi.c
+C_SOURCES += drivers/SH1106.c
+C_SOURCES += lib/ring_buffer.c
+C_SOURCES += lib/Font_8x8.c
+
 OBJECTS = $(addprefix $(BUILD_DIR)/,$(C_SOURCES:.c=.o)) $(BUILD_DIR)/startup.o
 
 .PHONY: all flash clean

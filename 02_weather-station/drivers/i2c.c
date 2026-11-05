@@ -1,9 +1,4 @@
-
-
 #include "./i2c.h"
-#include "./timer.h"
-
-#include <stdio.h>
 
 #define RCC_BASE 0x40023800
 /*
@@ -55,15 +50,7 @@
       if (i2c_wait_for(&I2C_SR1, (1U << 0), true)) {}
 */
 static bool i2c_wait_for(volatile uint32_t *reg, uint32_t mask, bool wanted_set) {
-  uint32_t start_ms = timer_get_ms();
-
-  while ((bool)(*reg & mask) != wanted_set) {
-    if ((uint32_t)(timer_get_ms() - start_ms) >= I2C_TIMEOUT_MS) {
-      return false;
-    }
-  }
-
-  return true;
+  return timer_wait_for(reg, mask, wanted_set, I2C_TIMEOUT_MS);
 }
 
 static bool i2c_wait_for_address(void) {
@@ -90,7 +77,7 @@ static bool i2c_wait_for_address(void) {
       return false;
     }
 
-    if ((uint32_t)(timer_get_ms() - start_ms) >= I2C_TIMEOUT_MS) {
+    if ((timer_get_ms() - start_ms) >= I2C_TIMEOUT_MS) {
       return false;
     }
   }

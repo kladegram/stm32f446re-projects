@@ -1,6 +1,5 @@
 #include "usart.h"
 #include <stdio.h>
-#include <stdlib.h>
 
 /**
  * UM1724: 7.10 USART communication
@@ -217,11 +216,10 @@ void usart_write_int(int i) {
   usart_write_string(t);
 }
 
-void usart_write_float(float f) {
-  char t[16];
-  int32_t v = (int32_t)(f * 1000.0f);
-  snprintf(t, sizeof(t), "%s%ld.%03ld", f < 0.0f ? "-" : "", labs(v / 1000), labs(v % 1000));
-  usart_write_string(t);
+void usart_write_float(float value) {
+  char text[24];
+  snprintf(text, sizeof text, "%.3f", value);
+  usart_write_string(text);
 }
 
 bool usart_read_char(char *out_char) {

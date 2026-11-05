@@ -1,8 +1,9 @@
 #pragma once
 
+#include "./timer.h"
 #include <stdbool.h>
-#include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 void i2c_init(void);
 void i2c_reset(void);
