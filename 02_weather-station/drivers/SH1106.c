@@ -247,3 +247,30 @@ bool sh1106_clear(void) {
 
   return true;
 }
+
+bool sh1106_enter_sleep(void) {
+  // Set Display Off
+  if (!sh1106_write_command(0xAE)) {
+    return false;
+  }
+
+  // Set Charge Pump
+  return sh1106_write_command(0xAD) && sh1106_write_command(0x8A);
+}
+
+bool sh1106_exit_sleep(void) {
+  // Set Charge Pump
+  if (!sh1106_write_command(0xAD) || !sh1106_write_command(0x8B)) {
+    return false;
+  }
+
+  // Set Display On
+  if (!sh1106_write_command(0xAF)) {
+    return false;
+  }
+
+  // Power Stabilized (100ms Delay Recommended)
+  timer_delay_ms(100);
+
+  return true;
+}

@@ -15,8 +15,121 @@
 #include "drivers/usart.h"
 
 volatile bool is_reading_requested = true;
-
 ring_buff_t uart_rx_buffer = {0};
+
+void USART2_IRQHandler(void);
+void EXTI15_10_IRQHandler(void);
+void process_uart_rx_buffer(void);
+void display_reading(float readings[2]);
+void display_error(void);
+
+enum app_states {
+  //
+  APP_INIT,
+  APP_MEASURING,
+  APP_SHOWING,
+  APP_ENTER_IDLE,
+  APP_IDLE
+};
+
+struct app_context {
+  enum app_states state;
+  uint32_t display_started_ms;
+};
+
+static struct app_context app = {.state = APP_INIT};
+
+int main(void) {
+  // RM0390: 33.16.1 Debug support for low-power modes
+  *(volatile uint32_t *)(0xE0042004) |= (1 << 0);
+
+  usart_init();
+  led_init();
+  button_init();
+  timer_init();
+
+  aht20_init((uint8_t)0x38);
+
+  sh1106_init();
+  sh1106_clear();
+
+  usart_write_string("\r\n=== Weather Station ===\r\n");
+
+  while (1) {
+    // Check not yet processed command from USART
+    process_uart_rx_buffer();
+
+    // Activate sensor if reading was requested
+    if (is_reading_requested) {
+      if (app.state == APP_IDLE && !sh1106_exit_sleep()) {
+        continue;
+      }
+
+      if (app.state != APP_MEASURING) {
+        // Note: At this point, the user may trigger another request, but it can be safely ignored
+        aht20_begin(timer_get_ms());
+
+        app.state = APP_MEASURING;
+      }
+
+      is_reading_requested = false;
+    }
+
+    switch (app.state) {
+      case APP_MEASURING:
+        // Update sensor with current time
+        aht20_update(timer_get_ms());
+
+        // Take readings from the sensors if they are ready to be read,
+        // and output them using USART and on the screen
+        float readings[2];
+
+        if (aht20_take_reading(readings)) {
+          display_reading(readings);
+
+          app.display_started_ms = timer_get_ms();
+          app.state = APP_SHOWING;
+        }
+
+        // Output error message if any
+        if (aht20_take_error()) {
+          display_error();
+
+          app.display_started_ms = timer_get_ms();
+          app.state = APP_SHOWING;
+        }
+
+        break;
+
+      case APP_SHOWING:
+        if ((uint32_t)(timer_get_ms() - app.display_started_ms) > 5000U) {
+          app.state = APP_ENTER_IDLE;
+        }
+
+        break;
+
+      case APP_ENTER_IDLE:
+        sh1106_enter_sleep();
+        app.state = APP_IDLE;
+
+        break;
+
+      case APP_IDLE:
+        // Safely put the CPU into a low-power sleep mode without missing incoming events
+        __disable_irq();
+
+        if (ring_buff_is_empty(&uart_rx_buffer) && !is_reading_requested) {
+          __WFI();
+        }
+        __enable_irq();
+
+        break;
+
+      default:
+        break;
+    }
+  }
+}
 
 void USART2_IRQHandler(void) {
   char c;
@@ -41,7 +154,7 @@ void EXTI15_10_IRQHandler(void) {
   }
 }
 
-void process_uart_rx_buffer() {
+void process_uart_rx_buffer(void) {
   uint8_t c;
 
   if (ring_buff_pop(&uart_rx_buffer, &c)) {
@@ -66,82 +179,32 @@ void process_uart_rx_buffer() {
   }
 }
 
-int main(void) {
-  // RM0390: 33.16.1 Debug support for low-power modes
-  *(volatile uint32_t *)(0xE0042004) |= (1 << 0);
+void display_reading(float readings[2]) {
+  usart_write_string("Humidity: ");
+  usart_write_float(readings[0]);
+  usart_write_string("%\r\n");
+  usart_write_string("Temperature: ");
+  usart_write_float(readings[1]);
+  usart_write_string("C\r\n");
 
-  usart_init();
-  led_init();
-  button_init();
-  timer_init();
-
-  aht20_init((uint8_t)0x38);
-
-  sh1106_init();
   sh1106_clear();
 
-  usart_write_string("\r\n=== Weather Station ===\r\n");
+  h1106_set_pos(2, 10);
+  char text_t[24];
+  snprintf(text_t, sizeof text_t, "Temp.:  %.2fC", readings[1]);
+  h1106_write_string((unsigned char *)text_t);
 
-  while (1) {
-    // Check not yet processed command from USART
-    process_uart_rx_buffer();
+  h1106_set_pos(4, 10);
+  char text_h[24];
+  snprintf(text_h, sizeof text_h, "Humid.: %.2f%%", readings[0]);
+  h1106_write_string((unsigned char *)text_h);
+}
 
-    // Activate sensor if reading was requested
-    if (is_reading_requested) {
-      // Note: At this point, the user may trigger another request, but it can be safely ignored
-      aht20_begin(timer_get_ms());
-      is_reading_requested = false;
-    }
+void display_error(void) {
+  usart_write_string("Error reading data\r\n");
 
-    // Update sensor with current time
-    if (aht20_is_busy()) {
-      aht20_update(timer_get_ms());
-    }
-
-    // Take readings from the sensors if they are ready to be read,
-    // and output them using USART and on the screen
-    float readings[2];
-
-    if (aht20_take_reading(readings)) {
-      usart_write_string("Humidity: ");
-      usart_write_float(readings[0]);
-      usart_write_string("%\r\n");
-      usart_write_string("Temperature: ");
-      usart_write_float(readings[1]);
-      usart_write_string("C\r\n");
-
-      sh1106_clear();
-
-      h1106_set_pos(2, 10);
-      char text_t[24];
-      snprintf(text_t, sizeof text_t, "Temp:   %.2fC", readings[1]);
-      h1106_write_string((unsigned char *)text_t);
-
-      h1106_set_pos(4, 10);
-      char text_h[24];
-      snprintf(text_h, sizeof text_h, "Humid.: %.2f%%", readings[0]);
-      h1106_write_string((unsigned char *)text_h);
-    }
-
-    // Output error message if any
-    if (aht20_take_error()) {
-      usart_write_string("Error reading data\r\n");
-
-      sh1106_clear();
-      h1106_set_pos(2, 10);
-      const unsigned char text_e[] = "Error";
-      h1106_write_string(text_e);
-    }
-
-    // Safely put the CPU into a low-power sleep mode without missing incoming events
-    // TODO: Implement "Standby" mode and Wakeup pin
-    // TODO: Implement Screen "Entering Sleep Mode" and "Exiting Sleep Mode" sequences
-    __disable_irq();
-
-    if (!aht20_is_busy() && !is_reading_requested && ring_buff_is_empty(&uart_rx_buffer)) {
-      __WFI();
-    }
-
-    __enable_irq();
-  }
+  sh1106_clear();
+  h1106_set_pos(2, 10);
+  const unsigned char text_e[] = "Error";
+  h1106_write_string(text_e);
 }

@@ -9,3 +9,5 @@ bool sh1106_write_data(unsigned char);
 bool h1106_write_string(const unsigned char *s);
 bool h1106_set_pos(uint32_t page, uint32_t column);
 bool sh1106_clear(void);
+bool sh1106_enter_sleep(void);
+bool sh1106_exit_sleep(void);
