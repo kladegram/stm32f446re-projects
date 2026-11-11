@@ -1,28 +1,47 @@
 # STM32F446RE Projects
 
-Embedded C projects on the **ST NUCLEO-F446RE** board (Arm Cortex-M4F, up to 180 MHz, 512 KB flash, 128 KB RAM).
+A collection of embedded C projects for the ST NUCLEO-F446RE,
+exploring GPIO, timers, interrupts, UART, FreeRTOS, and sensor interfacing.
 
-This repository is my embedded-programming learning path. Each project builds on the previous one, starting from a blinking LED and working up to timers, interrupts, an RTOS, sensors and industrial communication protocols.
+## Hardware
+
+- ST NUCLEO-F446RE development board
+- AHT20 temperature and humidity sensor
+- Joy-IT SBC-OLED01.3 1.3" OLED 128x64 display
+- Dupont jumper wires
 
 ## Projects
 
-| #    | Project                                                    | Topics                                                  |
-| ---- | ---------------------------------------------------------- | ------------------------------------------------------- |
-| 01.1 | [Blinky: HAL loop](01_blinky-evolution/01_hal-loop)           | GPIO input/output, polling, HAL, Makefile build          |
-| 01.2 | [Blinky: bare-metal](01_blinky-evolution/02_baremetal)        | Direct register access, GPIO, startup code               |
-| 01.3 | [Blinky: SysTick timer](01_blinky-evolution/03_systick-timer) | SysTick exceptions, millisecond timebase, non-blocking timing |
-| 01.4 | [Blinky: UART debug](01_blinky-evolution/04_uart-debug)       | CMSIS device headers, USART2, polling TX, counter output, busy-wait delay |
-| 01.5 | [Blinky: FreeRTOS tasks](01_blinky-evolution/05_freertos-tasks) | RTOS tasks, scheduling, queues, UART logging              |
-| 01.6 | [Blinky: timer interrupts](01_blinky-evolution/06_timer-interrupts) | TIM2 interrupts, EXTI button input, reusable drivers, UART logging |
-| 02   | Weather station                                            | Sensors over I2C/SPI, data processing, output             |
-| 03   | Modbus slave                                               | UART, the Modbus RTU protocol, register map               |
+### [01 — Blinky evolution](01_blinky-evolution/)
 
-Steps 01.1 through 01.6 contain firmware. The weather station and Modbus slave
-are planned projects.
+A series of LED examples exploring different approaches to embedded programming:
 
-The UART example uses the chip's default 16 MHz clock. Its README includes
-instructions for reading the counter output through ST-LINK on Linux or WSL.
+1. **HAL loop** — GPIO control with STM32 HAL and blocking delays.
+2. **Bare-metal** — direct register access.
+3. **SysTick timer** — LED timing without blocking delays.
+4. **UART debug** — serial output through USART2.
+5. **FreeRTOS tasks** — tasks, queues, and serial logging.
+6. **Timer interrupts** — timer-driven blinking and button interrupts.
+
+### [02 — Weather station](02_weather-station/)
+
+A temperature and humidity station using an AHT20 sensor and a 128×64
+OLED display. Includes register-level peripheral drivers, UART output,
+and sleep between readings.
+
+## Build and flash
+
+The projects use `arm-none-eabi-gcc`, `make`, and `st-flash`.
+
+Run from an individual project directory:
+
+    make
+    make flash
+
+See each project's README for details.
 
 ## License
 
-See [LICENSE.md](LICENSE.md) for licensing terms and third-party code details.
+Original source code is licensed under the MIT License.
+Third-party components retain their respective licenses.
+See [LICENSE.md](LICENSE.md).

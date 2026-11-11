@@ -1,4 +1,12 @@
-# MIT License
+# License
+
+All original source code written by me in this project is licensed under the **MIT License**.
+
+Third-party files, libraries, images, and other assets are subject to their respective licenses. Detailed licensing terms for those files are specified within the files themselves or in their accompanying license and README documents.
+
+---
+
+## MIT License
 
 Copyright (c) 2026 Jānis Skarnelis
 
@@ -19,12 +27,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-## Third-party code
-
-Code from STMicroelectronics and Arm (each project's `Drivers/` folder and
-CubeMX-generated files) keeps its own license. See the `LICENSE.txt` files and
-the notices in those files.
-
-The vendored FreeRTOS kernel in `01_blinky-evolution/05_freertos-tasks/FreeRTOS-Kernel/`
-keeps its MIT license. See that directory's `LICENSE.md` and source notices.

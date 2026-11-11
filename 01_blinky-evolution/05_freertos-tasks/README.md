@@ -1,36 +1,40 @@
 # Blinky: FreeRTOS tasks
 
-Fifth step of the blinky series, following [UART debug](../04_uart-debug).
+An example of FreeRTOS tasks, queues, and serial logging for the NUCLEO-F446RE.
 
-Three FreeRTOS tasks blink the green LED on PA5 every 500 ms, queue a status
-message every 3 seconds, and send logs through USART2 on PA2. Each LED toggle
-is logged. Only the logging task writes to UART, so messages stay together.
+Three tasks toggle the green LED (PA5) every 500 ms, queue a status message
+every 3 seconds, and send queued logs through USART2 (PA2).
+Only the logging task writes to UART, keeping messages together.
 
-The firmware uses CMSIS headers and the default 16 MHz clock. It follows
-stage 7 of [Artful Bytes' RTOS example](https://github.com/artfulbytes/i_kept_coding_until_an_rtos_was_inevitable/blob/main/main.c).
+Based on stage 7 of [Artful Bytes' RTOS example](https://github.com/artfulbytes/i_kept_coding_until_an_rtos_was_inevitable/blob/main/main.c).
 
 ## Build and flash
 
-Requirements: `arm-none-eabi-gcc`, `make`, and `st-flash` on Linux or WSL.
-FreeRTOS is included; CMSIS files are reused from `../01_hal-loop`.
-
-Run from this directory:
+Requires `arm-none-eabi-gcc`, `make`, and `st-flash` on Linux or WSL.
+Connect the board through its ST-LINK USB port and run from this directory:
 
 ```sh
-make          # build firmware.elf, firmware.bin, and firmware.hex in build/
-make flash    # flash the binary and reset the board
-make clean    # delete build/
+make
+make flash
+make clean
 ```
 
-Connect the ST-LINK USB port and open its virtual COM port at **115200 baud,
-8 data bits, no parity, 1 stop bit, no flow control**. On Linux or WSL:
+Build output is saved in `build/`. FreeRTOS is included;
+CMSIS files are reused from `../01_hal-loop/`.
+
+## Serial output
+
+Open the ST-LINK virtual COM port at **115200 baud, 8N1, no flow control**.
+For example, on Linux or WSL:
 
 ```sh
-picocom -b 115200 -d 8 -y n -p 1 -f n /dev/ttyACM0
+screen /dev/ttyACM0 115200
 ```
 
-Use your actual serial device name.
+Replace `/dev/ttyACM0` with your serial device.
+
+Previous: [UART debug](../04_uart-debug/). Next: [Timer interrupts](../06_timer-interrupts/).
 
 ## License
 
-See [LICENSE.md](../../LICENSE.md) for licensing terms and third-party code details.
+See [LICENSE.md](../../LICENSE.md) for original and third-party code licenses.

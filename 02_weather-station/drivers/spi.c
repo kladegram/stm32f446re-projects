@@ -27,21 +27,6 @@
     PB15    SPI2_MOSI   AF5
 */
 /*
-    DS10693: Table 10. STM32F446xx pin and ball descriptions
-    UM1724: Table 29. ST morpho connector on NUCLEO-F401RE, NUCLEO-F411RE, NUCLEO-F446RE
-    ===
-
-    Name        ST morpho connector     Function                        Display Pin
-    ------------------------------------------------------------------------------
-    GND         CN7  / 20               -                           ->  Gnd
-    +3.3V       CN7  / 16               -                           ->  Vcc
-    PB13        CN10 / 30               SPI2_SCK                    ->  Clk
-    PB15        CN10 / 26               SPI2_MOSI                   ->  Mosi
-    PB2         CN10 / 22               General-purpose I/O         ->  Res
-    PB1         CN10 / 24               General-purpose I/O         ->  Dc
-    PB14        CN10 / 28               General-purpose I/O         ->  Cs
-*/
-/*
     DS10693: Table 12. STM32F446xC/E register boundary addresses
     ===
     Bus         Boundary address                Peripheral
@@ -49,19 +34,22 @@
     APB1        0x4000 3800 - 0x4000 3BFF       SPI2 / I2S2
 */
 #define RCC_BASE 0x40023800
-#define RCC_AHB1ENR *(volatile uint32_t *)(RCC_BASE + 0x30)
-#define RCC_APB1ENR *(volatile uint32_t *)(RCC_BASE + 0x40)
+#define RCC_AHB1ENR (*(volatile uint32_t *)(RCC_BASE + 0x30))
+#define RCC_APB1ENR (*(volatile uint32_t *)(RCC_BASE + 0x40))
 
 #define GPIOB_BASE 0x40020400
-#define GPIOB_MODER *(volatile uint32_t *)(GPIOB_BASE + 0x00)
-#define GPIOB_AFRH *(volatile uint32_t *)(GPIOB_BASE + 0x24)
+#define GPIOB_MODER (*(volatile uint32_t *)(GPIOB_BASE + 0x00))
+#define GPIOB_AFRL (*(volatile uint32_t *)(GPIOB_BASE + 0x20))
+#define GPIOB_AFRH (*(volatile uint32_t *)(GPIOB_BASE + 0x24))
 
 #define SPI2_BASE 0x40003800
-#define SPI2_CR1 *(volatile uint32_t *)(SPI2_BASE + 0x00)
-#define SPI2_SR *(volatile uint32_t *)(SPI2_BASE + 0x08)
-#define SPI2_DR *(volatile uint32_t *)(SPI2_BASE + 0x0C)
+#define SPI2_CR1 (*(volatile uint32_t *)(SPI2_BASE + 0x00))
+#define SPI2_SR (*(volatile uint32_t *)(SPI2_BASE + 0x08))
+#define SPI2_DR (*(volatile uint32_t *)(SPI2_BASE + 0x0C))
 
 #define SPI_TIMEOUT_MS 20U
+
+static spi2_config_t spi2_config;
 
 /*
   Checks flags with timeout, replaces
@@ -73,7 +61,9 @@ static bool spi_wait_for(volatile uint32_t *reg, uint32_t mask, bool wanted_set)
   return timer_wait_for(reg, mask, wanted_set, SPI_TIMEOUT_MS);
 }
 
-void spi2_init(void) {
+void spi2_init(const spi2_config_t *config) {
+  spi2_config = *config;
+
   /*
     RM0390: 26.3.7 SPI configuration
     ===
@@ -103,18 +93,31 @@ void spi2_init(void) {
   // Enable SPI2 clock
   RCC_APB1ENR |= (1U << 14);
 
-  // Set pin modes for PB13 and PB15 - AF5; 10: Alternate function mode
-  GPIOB_MODER = (GPIOB_MODER & ~(3U << (13 * 2))) | (2U << (13 * 2));
-  GPIOB_MODER = (GPIOB_MODER & ~(3U << (15 * 2))) | (2U << (15 * 2));
+  // Set pin modes; SCK and MOSI pins - AF5; "10": Alternate function mode
+  GPIOB_MODER =
+      (GPIOB_MODER & ~(3U << (spi2_config.sck_pin * 2))) | (2U << (spi2_config.sck_pin * 2));
+  GPIOB_MODER =
+      (GPIOB_MODER & ~(3U << (spi2_config.mosi_pin * 2))) | (2U << (spi2_config.mosi_pin * 2));
 
-  // Set pin modes for PB1, PB2, PB14 - 01: General purpose output mode
-  GPIOB_MODER = (GPIOB_MODER & ~(3U << (1 * 2))) | (1U << (1 * 2));
-  GPIOB_MODER = (GPIOB_MODER & ~(3U << (2 * 2))) | (1U << (2 * 2));
-  GPIOB_MODER = (GPIOB_MODER & ~(3U << (14 * 2))) | (1U << (14 * 2));
+  // Set pin alternate functions
+  //    - GPIOx_AFRL (for pin 0 to 7) and GPIOx_AFRH (for pin 8 to 15)
+  //    - "0101": AF5
+  uint8_t sck_pin = spi2_config.sck_pin;
+  uint8_t mosi_pin = spi2_config.mosi_pin;
 
-  // Set alternate functions; PB13 and PB15 - AF5; 0101: AF5
-  GPIOB_AFRH = (GPIOB_AFRH & ~(0b1111U << (5U * 4))) | (0b0101U << (5U * 4));
-  GPIOB_AFRH = (GPIOB_AFRH & ~(0b1111U << (7U * 4))) | (0b0101U << (7U * 4));
+  if (sck_pin >= 8) {
+    GPIOB_AFRH =
+        (GPIOB_AFRH & ~(0b1111U << ((sck_pin - 8) * 4))) | (0b0101U << ((sck_pin - 8) * 4));
+  } else {
+    GPIOB_AFRL = (GPIOB_AFRL & ~(0b1111U << (sck_pin * 4))) | (0b0101U << (sck_pin * 4));
+  }
+
+  if (mosi_pin >= 8) {
+    GPIOB_AFRH =
+        (GPIOB_AFRH & ~(0b1111U << ((mosi_pin - 8) * 4))) | (0b0101U << ((mosi_pin - 8) * 4));
+  } else {
+    GPIOB_AFRL = (GPIOB_AFRL & ~(0b1111U << (mosi_pin * 4))) | (0b0101U << (mosi_pin * 4));
+  }
 
   //^^ Step2: Write to the SPI_CR1 register:
   // Bit 15 BIDIMODE: Bidirectional data mode enable
@@ -145,9 +148,9 @@ void spi2_init(void) {
   //    0: Slave configuration
   //    1: Master configuration
 
-  SPI2_CR1 = (1U << 2)     // MSTR: Master
-             | (3U << 3)   // BR: fPCLK/16
-             | (1U << 8)   // SSI: Internal NSS high
+  SPI2_CR1 = (1U << 2)                               // MSTR: Master
+             | (uint32_t)(spi2_config.baud_div << 3) // BR (3: fPCLK/16)
+             | (1U << 8)                             // SSI: Internal NSS high
              | (1U << 9)   // SSM: NSS pin input is replaced with the value from the SSI bit
              | (1U << 15)  // BIDIMODE: 1-line
              | (1U << 14); // BIDIOE: transmit-only mode

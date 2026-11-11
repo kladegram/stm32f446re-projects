@@ -1,21 +1,29 @@
 
 #include "./SH1106.h"
 
-#define GPIOB_BSRR (*(volatile uint32_t *)(0x40020400U + 0x18U))
-
-#define GPIO_RESET_MASK(pin) (1U << ((pin) + 16U))
-#define GPIO_SET_MASK(pin) (1U << (pin))
-
-static void sh1106_set_res(void) {
-  GPIOB_BSRR = GPIO_SET_MASK(2U);
-}
-
-static void sh1106_reset_res(void) {
-  GPIOB_BSRR = GPIO_RESET_MASK(2U);
-}
-
 /*
-  Reference: https://cdn.sparkfun.com/assets/2/6/8/9/7/1.3inch-SH1106-OLED_Datasheet.pdf
+  Reference:
+  https://cdn.sparkfun.com/assets/2/6/8/9/7/1.3inch-SH1106-OLED_Datasheet.pdf
+
+
+  RES#
+  ===
+  This pin is reset signal input. When the pin is low, initialization of the chip is
+  executed. Keep this pin pull high during normal operation.
+
+
+  CS#
+  ===
+  This pin is the chip select input. The chip is enabled for MCU communication only when CS# is
+  pulled low.
+
+
+  D/C#
+  ===
+  This pin is Data/Command control pin. When the pin is pulled high, the input at D7~D0 is treated
+  as display data. When the pin is pulled low, the input at D7~D0 will be transferred to the command
+  register.
+
 
   Write instruction/command sample
   ===
@@ -48,34 +56,43 @@ static void sh1106_reset_res(void) {
     CS=1;
   }
   ```
-*/
-/*
-
-  Pins
-  ===
-  DC = PB1
-  CS = PB14
-  WR = - (write pulse, unused)
 
 */
+#define GPIOB_BASE 0x40020400
+#define GPIOB_MODER (*(volatile uint32_t *)(GPIOB_BASE + 0x00))
+#define GPIOB_BSRR (*(volatile uint32_t *)(GPIOB_BASE + 0x18U))
+
+#define GPIO_RESET_MASK(pin) (1U << ((pin) + 16U))
+#define GPIO_SET_MASK(pin) (1U << (pin))
+
+static sh1106_config_t sh1106_config;
+
+static void sh1106_set_res(void) {
+  GPIOB_BSRR = GPIO_SET_MASK(sh1106_config.res_pin);
+}
+
+static void sh1106_reset_res(void) {
+  GPIOB_BSRR = GPIO_RESET_MASK(sh1106_config.res_pin);
+}
+
 static void sh1106_set_dc(void) {
-  GPIOB_BSRR = GPIO_SET_MASK(1U);
+  GPIOB_BSRR = GPIO_SET_MASK(sh1106_config.dc_pin);
 }
 
 static void sh1106_reset_dc(void) {
-  GPIOB_BSRR = GPIO_RESET_MASK(1U);
+  GPIOB_BSRR = GPIO_RESET_MASK(sh1106_config.dc_pin);
 }
 
 static void sh1106_set_cs(void) {
-  GPIOB_BSRR = GPIO_SET_MASK(14U);
+  GPIOB_BSRR = GPIO_SET_MASK(sh1106_config.cs_pin);
 }
 
 static void sh1106_reset_cs(void) {
-  GPIOB_BSRR = GPIO_RESET_MASK(14U);
+  GPIOB_BSRR = GPIO_RESET_MASK(sh1106_config.cs_pin);
 }
 
-void sh1106_init(void) {
-  spi2_init();
+void sh1106_init(const sh1106_config_t *config) {
+  sh1106_config = *config;
 
   /*
 
@@ -90,13 +107,15 @@ void sh1106_init(void) {
     RES=1;
     delay(1000);
     ```
-
-    RES#
-    ===
-    This pin is reset signal input. When the pin is low, initialization of the chip is
-    executed. Keep this pin pull high during normal operation.
-
   */
+  // Set pin mode "01": General purpose output mode
+  GPIOB_MODER =
+      (GPIOB_MODER & ~(3U << (sh1106_config.dc_pin * 2))) | (1U << (sh1106_config.dc_pin * 2));
+  GPIOB_MODER =
+      (GPIOB_MODER & ~(3U << (sh1106_config.cs_pin * 2))) | (1U << (sh1106_config.cs_pin * 2));
+  GPIOB_MODER =
+      (GPIOB_MODER & ~(3U << (sh1106_config.res_pin * 2))) | (1U << (sh1106_config.res_pin * 2));
+
   sh1106_set_res();
   timer_delay_ms(1);
   sh1106_reset_res();
